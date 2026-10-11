@@ -11,6 +11,8 @@ export function Tracker() {
       src="/whydunit.js"
       strategy="afterInteractive"
       onLoad={() => {
+        // Health probes and uptime checks opt out of analytics with ?wd_disable=1.
+        if (new URLSearchParams(window.location.search).get("wd_disable") === "1") return;
         simContext();
         window.whydunit?.init({
           key,
