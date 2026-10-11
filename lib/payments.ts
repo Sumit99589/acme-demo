@@ -66,20 +66,46 @@ export async function subscribe(opts: {
       ? { outcome: "declined", provider: "mock", declineCode: decline }
       : { outcome: "succeeded", provider: "mock", subscription: `sub_mock_${opts.userId}` };
   }
+  // First month is a real PaymentIntent (so declines are recorded on the PaymentIntent and its charge, with
+  // decline codes); the subscription then starts from the saved card with that month already paid.
   let customer: Stripe.Customer | undefined;
+  let paymentIntent: Stripe.PaymentIntent | undefined;
   try {
     customer = await stripe.customers.create({ email: opts.email, metadata: meta });
-    await stripe.paymentMethods.attach(opts.paymentMethod, { customer: customer.id }).then((pm) =>
-      stripe.customers.update(customer!.id, { invoice_settings: { default_payment_method: pm.id } }),
-    );
+    paymentIntent = await stripe.paymentIntents.create({
+      amount: PRICE_CENTS,
+      currency: "usd",
+      customer: customer.id,
+      payment_method: opts.paymentMethod,
+      allowed_payment_method_types: ["card"],
+      confirm: true,
+      setup_future_usage: "off_session",
+      description: "Acme Notes Pro — first month",
+      metadata: meta,
+    });
+    if (paymentIntent.status !== "succeeded") {
+      return {
+        outcome: "error",
+        provider: "stripe",
+        customer: customer.id,
+        paymentIntent: paymentIntent.id,
+        message: `PaymentIntent ${paymentIntent.status}`,
+      };
+    }
     const sub = await stripe.subscriptions.create({
       customer: customer.id,
       items: [{ price: await proPrice(stripe) }],
-      metadata: meta,
-      payment_behavior: "error_if_incomplete",
-      expand: ["latest_invoice.payments"],
+      default_payment_method: paymentIntent.payment_method as string,
+      trial_end: Math.floor(Date.now() / 1000) + 30 * 24 * 3600,
+      metadata: { ...meta, first_payment_intent: paymentIntent.id },
     });
-    return { outcome: "succeeded", provider: "stripe", customer: customer.id, subscription: sub.id };
+    return {
+      outcome: "succeeded",
+      provider: "stripe",
+      customer: customer.id,
+      subscription: sub.id,
+      paymentIntent: paymentIntent.id,
+    };
   } catch (e) {
     const err = e as Stripe.errors.StripeError;
     if (err.type === "StripeCardError") {
@@ -88,7 +114,7 @@ export async function subscribe(opts: {
         provider: "stripe",
         declineCode: err.decline_code || err.code || "card_declined",
         customer: customer?.id,
-        paymentIntent: (err.payment_intent as { id?: string } | undefined)?.id,
+        paymentIntent: (err.payment_intent as { id?: string } | undefined)?.id ?? paymentIntent?.id,
         message: err.message,
       };
     }
