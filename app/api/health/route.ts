@@ -1,8 +1,8 @@
+import { connection } from "next/server";
 import { sql } from "@/lib/db";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
+  await connection(); // always run at request time, never prerendered
   let db = "not_configured";
   if (sql) {
     try {
