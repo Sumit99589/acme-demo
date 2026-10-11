@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Copy the built Whydunit snippet into public/. Run after `pnpm build` in whydunit/packages/snippet.
+# Copy the built Whydunit snippet (core + on-demand recorder) into public/.
 set -euo pipefail
-SRC="${1:-../whydunit/packages/snippet/dist/whydunit.js}"
-cp "$SRC" public/whydunit.js
-echo "synced $(wc -c < public/whydunit.js) bytes to public/whydunit.js"
+DIST="${1:-../whydunit/packages/snippet/dist}"
+cp "$DIST/whydunit.js" public/whydunit.js
+cp "$DIST/whydunit-record.js" public/whydunit-record.js
+echo "synced $(wc -c < public/whydunit.js) + $(wc -c < public/whydunit-record.js) bytes"
