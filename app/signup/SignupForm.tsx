@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Field } from "@/components/Field";
 import { identify, setCurrentUser, simContext, track } from "@/lib/client";
 
@@ -10,6 +10,16 @@ export function SignupForm() {
   const started = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Enable submission only once the browser is idle, so the field animations and the first
+  // input stay smooth on slow phones (INP was poor on the signup page).
+  const [interactive, setInteractive] = useState(false);
+
+  useEffect(() => {
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(() => setInteractive(true), { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+  }, []);
 
   const markStarted = () => {
     if (started.current) return;
@@ -20,6 +30,7 @@ export function SignupForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     markStarted();
+    if (!interactive) return;
     const form = new FormData(e.currentTarget);
     const name = String(form.get("name") || "");
     const email = String(form.get("email") || "");
